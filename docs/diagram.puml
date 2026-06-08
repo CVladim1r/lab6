@@ -1,0 +1,185 @@
+@startuml lab6_classes
+skinparam classAttributeIconSize 0
+skinparam monochrome true
+skinparam shadowing false
+skinparam classFontSize 10
+skinparam defaultFontSize 10
+skinparam ArrowColor #333333
+skinparam ClassBorderColor #444444
+skinparam PackageBorderColor #888888
+skinparam PackageBackgroundColor White
+skinparam nodesep 30
+skinparam ranksep 40
+skinparam pageMargin 10
+
+top to bottom direction
+
+' ═══════════ COMMON.MODEL ═══════════
+package "common.model" #F5F5F5 {
+  class HumanBeing <<Serializable, Comparable>> {
+    - id : int
+    - name : String
+    - coordinates : Coordinates
+    - realHero : boolean
+    - hasToothpick : Boolean
+    - impactSpeed : Integer
+    - weaponType : WeaponType
+    - mood : Mood
+    - car : Car
+    + compareTo(o) : int
+  }
+  class Coordinates <<Serializable>> {
+    - x : Float
+    - y : Double
+  }
+  class Car <<Serializable>> {
+    - name : String
+    - cool : Boolean
+  }
+  enum WeaponType {
+    HAMMER
+    SHOTGUN
+    RIFLE
+    KNIFE
+  }
+  enum Mood {
+    SADNESS
+    SORROW
+    APATHY
+  }
+
+  HumanBeing *-- Coordinates
+  HumanBeing *-- Car
+  HumanBeing --> WeaponType
+  HumanBeing --> Mood
+}
+
+' ═══════════ COMMON.NETWORK ═══════════
+package "common.network" #F5F5F5 {
+  enum CommandType <<Serializable>> {
+    HELP
+    INFO
+    SHOW
+    CLEAR
+    INSERT
+    UPDATE
+    REMOVE_KEY
+    REMOVE_LOWER
+    REMOVE_GREATER_KEY
+    REMOVE_LOWER_KEY
+    COUNT_BY_WEAPON_TYPE
+    GROUP_COUNTING_BY_NAME
+    PRINT_FIELD_DESCENDING_MOOD
+    GET_BY_ID
+  }
+  class Request <<Serializable>> {
+    - commandType : CommandType
+    - args : String[]
+    - humanBeing : HumanBeing
+  }
+  class Response <<Serializable>> {
+    - success : boolean
+    - message : String
+    - humanBeing : HumanBeing
+  }
+  Request --> CommandType
+  Request --> HumanBeing
+  Response --> HumanBeing
+}
+
+' ═══════════ COMMON.IO ═══════════
+package "common.io" #F5F5F5 {
+  abstract class AbstractCsvService {
+    # splitCsvLine(line) : List
+    # escape(s) : String
+  }
+  class CsvService {
+    + {static} load(path, warn) : Map
+    + {static} save(path, map) : void
+  }
+  CsvService --|> AbstractCsvService
+}
+
+' ═══════════ SERVER ═══════════
+package "server" #EFEFEF {
+  class ServerApp {
+    - port : int
+    - running : volatile boolean
+    + run() : void
+  }
+  class CollectionManager {
+    - data : TreeMap<Integer,HumanBeing>
+    - nextId : int
+    + insert(key,hb) : Optional<String>
+    + updateByHumanId(id,hb) : Optional<String>
+    + removeLower(threshold) : int
+    + buildShow() : String
+    + buildInfo() : String
+    + save() : void
+  }
+  ServerApp --> CollectionManager
+  CollectionManager --> CsvService
+  CollectionManager o-- HumanBeing
+}
+
+' ═══════════ SERVER.MODULES ═══════════
+package "server.modules" #EFEFEF {
+  class ConnectionModule {
+    + receive() : Packet
+  }
+  class RequestReader {
+    + deserialize(data) : Request
+  }
+  class CommandProcessor {
+    + process(req) : Response
+  }
+  class ResponseSender {
+    + send(addr, resp) : void
+  }
+  ServerApp --> ConnectionModule
+  ServerApp --> RequestReader
+  ServerApp --> CommandProcessor
+  ServerApp --> ResponseSender
+  RequestReader ..> Request
+  ResponseSender ..> Response
+}
+
+' ═══════════ SERVER.COMMAND ═══════════
+package "server.command" #EFEFEF {
+  interface ServerCommand {
+    + execute(req) : Response
+  }
+  class CommandRegistry {
+    - registry : EnumMap<CommandType,ServerCommand>
+    + find(type) : Optional<ServerCommand>
+  }
+  note bottom of CommandRegistry
+    14 реализаций:
+    HelpCommand, InfoCommand, ShowCommand,
+    ClearCommand, InsertCommand, UpdateCommand,
+    RemoveKeyCommand, RemoveLowerCommand,
+    RemoveGreaterKeyCommand, RemoveLowerKeyCommand,
+    CountByWeaponTypeCommand,
+    GroupCountingByNameCommand,
+    PrintFieldDescendingMoodCommand,
+    GetByIdCommand
+  end note
+  CommandRegistry o-- ServerCommand
+  CommandProcessor --> CommandRegistry
+}
+
+' ═══════════ CLIENT ═══════════
+package "client" #EFEFEF {
+  class UdpClient <<Closeable>> {
+    - TIMEOUT_MS : int = 5000
+    - MAX_RETRIES : int = 3
+    - channel : DatagramChannel
+    - selector : Selector
+    + send(req) : Response
+    + connect() : void
+  }
+  UdpClient ..> Request : serializes
+  UdpClient ..> Response : deserializes
+}
+
+@enduml

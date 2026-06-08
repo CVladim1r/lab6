@@ -1,0 +1,8 @@
+target/
+*.class
+*.bat
+*.sh
+docs/plantuml.jar
+docs/create_report.js
+docs/create_docs.py
+docs/create_pdf.py
